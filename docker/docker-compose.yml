@@ -1,0 +1,122 @@
+version: '3.9'
+
+networks:
+    bot:
+        driver: bridge
+        name: english_adviser
+
+volumes:
+    mysql-storage:
+    redis-storage:
+
+services:
+    server:
+        build:
+            context: .
+            dockerfile: nginx.dockerfile
+            args:
+                - NGINXUSER=${NGINXUSER:-www-data}
+                - NGINXGROUP=${NGINXGROUP:-www-data}
+        container_name: adviser_nginx
+        ports:
+            - "80:80"
+        volumes:
+            -   type: bind
+                source: ..
+                target: /var/www/html
+        depends_on:
+            - php
+            - redis
+            - mysql
+        networks:
+            bot:
+                aliases:
+                    - english-adviser.me
+
+    mysql:
+        image: mysql:8
+        container_name: adviser_mysql
+        restart: unless-stopped
+        command: --default-authentication-plugin=mysql_native_password --max_allowed_packet=3221225472
+        tty: true
+        ports:
+            - 4306:3306
+        environment:
+            - MYSQL_DATABASE=${DB_NAME}
+            - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
+        networks:
+            - bot
+        volumes:
+            -   type: bind
+                source: ./mysql/init/init.sql
+                target: /docker-entrypoint-initdb.d/init.sql
+            -   type: volume
+                source: mysql-storage
+                target: /var/lib/mysql
+
+    phpmyadmin:
+        image: phpmyadmin
+        container_name: adviser_pma
+        restart: always
+        ports:
+            - 8080:80
+        environment:
+            PMA_HOST: mysql
+            PMA_USER: root
+            PMA_PASSWORD: 12345
+            UPLOAD_LIMIT: 2048M
+        depends_on:
+            - mysql
+        networks:
+            - bot
+
+    php:
+        build:
+            context: .
+            dockerfile: php.dockerfile
+            args:
+                - PHPUSER=${PHPUSER:-www-data}
+                - PHPGROUP=${PHPGROUP:-www-data}
+        container_name: adviser_php
+        depends_on:
+            - mysql
+        volumes:
+            -   type: bind
+                source: ..
+                target: /var/www/html
+        networks:
+            - bot
+
+    artisan:
+        build:
+            context: .
+            dockerfile: php.dockerfile
+            args:
+                - PHPUSER=${PHPUSER:-www-data}
+                - PHPGROUP=${PHPGROUP:-www-data}
+        container_name: adviser_artisan
+        volumes:
+            -   type: bind
+                source: ..
+                target: /var/www/html
+        depends_on:
+            - mysql
+        working_dir: /var/www/html
+        entrypoint: [ 'php', '/var/www/html/artisan' ]
+        networks:
+            - bot
+        environment:
+            - COMPOSER_AUTH
+
+    redis:
+        image: redis:6-alpine
+        container_name: adviser_redis
+        restart: unless-stopped
+        volumes:
+            -   type: volume
+                source: redis-storage
+                target: /data
+        networks:
+            - bot
+        ports:
+            - 6380:6380
