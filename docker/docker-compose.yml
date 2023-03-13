@@ -119,4 +119,4 @@ services:
         networks:
             - bot
         ports:
-            - 6380:6380
+            - 6380:6379
