@@ -114,7 +114,9 @@ class Manager
             $prompt = data_get(static::$prompts, $option, null);
 
             if(!$prompt){
-                throw new \Exception("Incorrect option: $option");
+                report(new \Exception("Incorrect option: $option"));
+                
+                return new TextMessage("Some error occurs. Please, try again later");
             }
 
             try {
