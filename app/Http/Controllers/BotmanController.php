@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Logic\Bots\Botman;
+use App\Logic\Bots\BotmanWrapper;
 use App\Logic\Manager;
 use App\Logic\Values\UserDto;
 
@@ -14,7 +14,7 @@ class BotmanController extends Controller
     public function enterRequest()
     {
         $botman = app('botman');
-        $botmanWrapper = new Botman($botman);
+        $botmanWrapper = new BotmanWrapper($botman);
 
         $manager = new Manager();
 

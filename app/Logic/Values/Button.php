@@ -15,7 +15,7 @@ class Button extends Fluent
         $this->text  = $text;
         $this->value = $value;
 
-        parent::__construct([$text, $value]);
+        parent::__construct(['text' => $text, 'value' => $value]);
     }
 
 }

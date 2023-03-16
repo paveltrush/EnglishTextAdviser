@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BotmanController;
+use App\Http\Controllers\TelegramController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,3 +20,6 @@ Route::get('/', function () {
 });
 
 Route::match(['get', 'post'], '/botman', [BotmanController::class,'enterRequest']);
+
+Route::get('/set-telegram-webhook',[TelegramController::class, 'setWebhook']);
+Route::post('/'.config('telegram.bots.mybot.token').'/webhook', [TelegramController::class, 'handle']);

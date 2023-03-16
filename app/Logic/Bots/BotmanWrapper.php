@@ -8,7 +8,7 @@ use App\Logic\Values\Messages\TextMessage;
 use BotMan\BotMan\Messages\Outgoing\Actions\Button;
 use BotMan\BotMan\Messages\Outgoing\Question;
 
-class Botman implements BotInterface
+class BotmanWrapper implements BotInterface
 {
     protected \BotMan\BotMan\BotMan $botman;
 
