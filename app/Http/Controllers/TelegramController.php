@@ -12,8 +12,6 @@ use Telegram\Bot\Objects\Update as UpdateObject;
 
 class TelegramController extends Controller
 {
-    protected const MESSAGE_INPUT = "message";
-    protected const BUTTON_INPUT = "callback_query";
     public function setWebhook()
     {
         return Telegram::setWebhook(['url' => config('telegram.bots.mybot.webhook_url')]);
@@ -35,6 +33,8 @@ class TelegramController extends Controller
                 'lastName' => $chat->lastName,
                 'username' => $chat->username
             ]);
+
+            Telegram::sendChatAction(['chat_id' => $chat->id, 'action' => 'typing']);
 
             $telegramWrapper->sendMessage(
                 $manager->solveEverything($input, $user)
