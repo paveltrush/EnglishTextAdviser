@@ -2,6 +2,7 @@
 
 namespace App\Logic\Bots;
 
+use App\Logic\Values\Buttons\ShareButton;
 use App\Logic\Values\Message;
 use App\Logic\Values\Messages\TextMessage;
 use App\Logic\Values\Messages\TextWithOptionsMessage;
@@ -35,10 +36,16 @@ class TelegramWrapper implements BotInterface
             $keyboard = [];
 
             foreach ($message->options->buttons as $option){
-                $keyboard[] = [['text' => $option->text, 'callback_data' => $option->value]];
+                $button = [['text' => $option->text, 'callback_data' => $option->value]];
+
+                if($option instanceof ShareButton){
+                    $button = [['text' => $option->text, 'switch_inline_query' => $option->value]];
+                }
+
+                $keyboard[] = $button;
             }
 
-            Bugsnag::leaveBreadcrumb("Options", null, $keyboard);
+            Bugsnag::leaveBreadcrumb("Telegram Options", null, $keyboard);
 
             $replyMarkup = Keyboard::make([
                 'inline_keyboard' => $keyboard,

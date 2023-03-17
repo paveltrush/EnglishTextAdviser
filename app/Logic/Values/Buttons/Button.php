@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Logic\Values;
+namespace App\Logic\Values\Buttons;
 
 use Illuminate\Support\Fluent;
 

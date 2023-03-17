@@ -2,12 +2,14 @@
 
 namespace App\Logic;
 
-use App\Logic\Values\Button;
+use App\Logic\Values\Buttons\Button;
+use App\Logic\Values\Buttons\ShareButton;
+use App\Logic\Values\Buttons\SimpleButton;
 use App\Logic\Values\Message;
 use App\Logic\Values\Messages\TextMessage;
+use App\Logic\Values\Messages\TextWithOptionsMessage;
 use App\Logic\Values\Options;
 use App\Logic\Values\UserDto;
-use App\Logic\Values\Messages\TextWithOptionsMessage;
 use App\Models\User;
 use Bugsnag\BugsnagLaravel\Facades\Bugsnag;
 use Illuminate\Support\Facades\Redis;
@@ -69,10 +71,10 @@ class Manager
 
             $buttons = [];
 
-            $buttons[] = new Button('Check grammatical and lexical errors', self::CHECK_ERRORS_COMMAND);
-            $buttons[] = new Button('Improve text to advanced level', self::MAKE_ADVANCED_COMMAND);
-            $buttons[] = new Button('Make text formal', self::MAKE_FORMAL_COMMAND);
-            $buttons[] = new Button('Make text informal', self::MAKE_INFORMAL_COMMAND);
+            $buttons[] = new SimpleButton('Check grammatical and lexical errors', self::CHECK_ERRORS_COMMAND);
+            $buttons[] = new SimpleButton('Improve text to advanced level', self::MAKE_ADVANCED_COMMAND);
+            $buttons[] = new SimpleButton('Make text formal', self::MAKE_FORMAL_COMMAND);
+            $buttons[] = new SimpleButton('Make text informal', self::MAKE_INFORMAL_COMMAND);
 
             $options->buttons = $buttons;
             $message->options = $options;
@@ -83,10 +85,10 @@ class Manager
         if($input === self::MENU_COMMAND){
             $buttons = [];
 
-            $buttons[] = new Button('Check grammatical and lexical errors', self::CHECK_ERRORS_COMMAND);
-            $buttons[] = new Button('Improve text to advanced level', self::MAKE_ADVANCED_COMMAND);
-            $buttons[] = new Button('Make text formal', self::MAKE_FORMAL_COMMAND);
-            $buttons[] = new Button('Make text informal', self::MAKE_INFORMAL_COMMAND);
+            $buttons[] = new SimpleButton('Check grammatical and lexical errors', self::CHECK_ERRORS_COMMAND);
+            $buttons[] = new SimpleButton('Improve text to advanced level', self::MAKE_ADVANCED_COMMAND);
+            $buttons[] = new SimpleButton('Make text formal', self::MAKE_FORMAL_COMMAND);
+            $buttons[] = new SimpleButton('Make text informal', self::MAKE_INFORMAL_COMMAND);
 
             return new TextWithOptionsMessage([
                 'messageText' => 'Choose one of the next options',
@@ -104,7 +106,7 @@ class Manager
 
         // if option chosen ask user for putting text
         if (Redis::get("'user:' . $user->userId . '.state'") === 'start' && in_array($input, array_keys(static::$options))) {
-            $message = new TextMessage("Please, put your text. Note: Your text should be not more than 350 words");
+            $message = new TextMessage("Please, put your text. Note: Your text should be not more than 500 words");
 
             Redis::set("'user:' . $user->userId . '.state'", 'option_selected');
             Redis::set("'user:' . $user->userId . '.option'", $input);
@@ -137,16 +139,19 @@ class Manager
                 'temperature' => 0,
             ]);
 
+            $text = $result['choices'][0]['text'];
+
             Bugsnag::leaveBreadcrumb('Open AI response', null, $result->toArray());
 
             Redis::set("'user:' . $user->userId . '.state'", 'start');
             Redis::del("'user:' . $user->userId . '.option'");
 
             $buttons   = [];
-            $buttons[] = new Button('Back to menu', self::MENU_COMMAND);
+            $buttons[] = new SimpleButton('Back to menu', self::MENU_COMMAND);
+            $buttons[] = new ShareButton('Share', $text);
 
             return new TextWithOptionsMessage([
-                'messageText' => $result['choices'][0]['text'],
+                'messageText' => $text,
                 'options'     => new Options(['buttons' => $buttons]),
             ]);
         }
