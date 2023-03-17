@@ -35,15 +35,15 @@ class TelegramWrapper implements BotInterface
             $keyboard = [];
 
             foreach ($message->options->buttons as $option){
-                $keyboard[] = ['text' => $option->text, 'callback_data' => $option->value];
+                $keyboard[] = [['text' => $option->text, 'callback_data' => $option->value]];
             }
 
             Bugsnag::leaveBreadcrumb("Options", null, $keyboard);
 
-            $replyMarkup = new Keyboard([
-                'inline_keyboard' => [$keyboard],
+            $replyMarkup = Keyboard::make([
+                'inline_keyboard' => $keyboard,
                 'resize_keyboard' => true,
-                'one_time_keyboard' => true
+                'one_time_keyboard' => true,
             ]);
 
             Telegram::sendMessage([
