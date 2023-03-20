@@ -20,6 +20,7 @@ services:
         container_name: adviser_nginx
         ports:
             - "80:80"
+            - "443:443"
         volumes:
             -   type: bind
                 source: ..
