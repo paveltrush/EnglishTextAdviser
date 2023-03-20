@@ -11,6 +11,7 @@ RUN sed -i "s/user www-data/user ${NGINXUSER}/g" /etc/nginx/nginx.conf
 ADD ./nginx/default.conf /etc/nginx/conf.d/
 ADD ./nginx/cert/adviser.crt /etc/ssl/
 ADD ./nginx/cert/adviser.key /etc/ssl/
+ADD ./nginx/cert/dhparam.conf /etc/nginx/
 
 RUN mkdir -p /var/www/html
 
