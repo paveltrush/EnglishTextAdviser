@@ -9,6 +9,7 @@ use App\Logic\Values\Messages\TextWithOptionsMessage;
 use Bugsnag\BugsnagLaravel\Facades\Bugsnag;
 use Telegram\Bot\Keyboard\Keyboard;
 use Telegram\Bot\Laravel\Facades\Telegram;
+use Telegram\Bot\Objects\Update as UpdateObject;
 
 class TelegramWrapper implements BotInterface
 {
@@ -65,4 +66,19 @@ class TelegramWrapper implements BotInterface
         throw new \LogicException("Incorrect message type");
     }
 
+    public function resolveInput(UpdateObject $update)
+    {
+        switch ($update->detectType()) {
+            case 'message':
+                return $update->message->text;
+            case 'callback_query':
+                $callbackQuery = $update->callbackQuery;
+                if ($callbackQuery->has('data')) {
+                    return $callbackQuery->data;
+                }
+                break;
+        }
+
+        throw new \LogicException($update->detectType()." isn't processed in code");
+    }
 }

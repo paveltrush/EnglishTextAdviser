@@ -2,19 +2,17 @@
 
 namespace App\Logic;
 
-use App\Logic\Values\Buttons\Button;
-use App\Logic\Values\Buttons\ShareButton;
-use App\Logic\Values\Buttons\SimpleButton;
+use App\Logic\Exceptions\NotFoundOptionException;
+use App\Logic\Integrations\GeneretingModel;
+use App\Logic\Repositories\Cache\CacheRepository;
+use App\Logic\Repositories\DB\UserRepository;
 use App\Logic\Values\Message;
-use App\Logic\Values\Messages\TextMessage;
-use App\Logic\Values\Messages\TextWithOptionsMessage;
-use App\Logic\Values\Options;
 use App\Logic\Values\UserDto;
-use App\Models\User;
 use Bugsnag\BugsnagLaravel\Facades\Bugsnag;
-use Illuminate\Support\Facades\Redis;
-use OpenAI\Laravel\Facades\OpenAI;
 
+/**
+ * Manager is responsible for resolving input request from users and returning messages
+ */
 class Manager
 {
     public const START_COMMAND = '/start';
@@ -41,125 +39,91 @@ class Manager
         self::MAKE_FORMAL_COMMAND   => 'Make the next text formal',
         self::MAKE_INFORMAL_COMMAND => 'Make text informal',
     ];
+    protected GeneretingModel $model;
+    protected UserRepository $userRepository;
+    private CacheRepository $cacheRepository;
 
-    public function solveEverything($input, UserDto $user): Message
+    public function __construct(GeneretingModel $model, UserRepository $userRepository, CacheRepository $cacheRepository)
     {
-        //TODO Cover method to try catch and send message to user about an error
+        $this->model = $model;
+
+        $this->userRepository = $userRepository;
+
+        $this->cacheRepository = $cacheRepository;
+    }
+
+    public function solveEverything(string $input, UserDto $user): Message
+    {
         Bugsnag::leaveBreadcrumb('User Input', null, ['input' => $input]);
         Bugsnag::leaveBreadcrumb('User Data', null, $user->toArray());
 
-        // check if command /start was typed by user and the user isn't added to the system
-        if ($input === self::START_COMMAND) {
-            // if customer doesn't exist add it to the system
-            if (!Redis::exists("'user:' . $user->userId . '.state'")) {
-                if (!User::where('chat_id', $user->userId)->first()) {
-                    $userDB = User::create([
-                        'chat_id'    => $user->userId,
-                        'first_name' => $user->firstName,
-                        'last_name'  => $user->lastName,
-                    ]);
+        try {
+            // check if command /start was typed by user and the user isn't added to the system
+            if ($input === self::START_COMMAND) {
+                // if customer doesn't exist add it to the system
+                if (!$this->cacheRepository->checkUserExists($user->userId)) {
+                    if ($this->userRepository->exists($user->userId)) {
+                        $this->userRepository->create($user);
+                    }
+
+                    // Set primary state and clear options
+                    $this->cacheRepository->setState($user->userId, 'start');
+                    $this->cacheRepository->removeOptions($user->userId);
+                }
+                // send options
+                return MessageFacade::createMenu('Hello! I\'m your text adviser. Choose one of the next options');
+            }
+
+            if ($input === self::MENU_COMMAND) {
+                return MessageFacade::createMenu('Choose one of the next options');
+            }
+
+            // if it's not '/start' command and customer not added, send him a prompt
+            if (!$this->cacheRepository->checkUserExists($user->userId)) {
+                Bugsnag::leaveBreadcrumb('State cache', null, ['state' => $this->cacheRepository->getCurrentState($user->userId)]);
+                Bugsnag::notifyError("State", "State wasn't set");
+
+                return MessageFacade::createText('Please, enter '.self::START_COMMAND.' command to start chatting');
+            }
+
+            // if option chosen ask user for putting text
+            if ($this->cacheRepository->getCurrentState($user->userId) === 'start' && in_array($input, array_keys(static::$options))) {
+                $this->cacheRepository->setState($user->userId, 'option_selected');
+                $this->cacheRepository->setOption($user->userId, $input);
+
+                return MessageFacade::createText('Please, put your text. Note: Your text should be not more than 500 words');
+            }
+
+            // if customer chose option it can put its text
+            if ($this->cacheRepository->getCurrentOption($user->userId) &&
+                $this->cacheRepository->getCurrentState($user->userId) === 'option_selected') {
+                // getting answer from ChatGPT
+                $option = $this->cacheRepository->getCurrentOption($user->userId);
+                $prompt = data_get(static::$prompts, $option);
+
+                if(!$prompt){
+                    throw new NotFoundOptionException();
                 }
 
-                // Set primary state and clear options
-                Redis::set("'user:' . $user->userId . '.state'", 'start');
-                Redis::del("'user:' . $user->userId . '.option'");
-            }
-            // send options
-            $message              = new TextWithOptionsMessage();
-            $message->messageText = 'Hello! I\'m your text adviser. Choose one of the next options';
-            $options              = new Options();
+                $prompt .= ": \"{$input}\"";
 
-            $buttons = [];
+                $answer = $this->model->handlePrompt($prompt);
 
-            $buttons[] = new SimpleButton('Check grammatical and lexical errors', self::CHECK_ERRORS_COMMAND);
-            $buttons[] = new SimpleButton('Improve text to advanced level', self::MAKE_ADVANCED_COMMAND);
-            $buttons[] = new SimpleButton('Make text formal', self::MAKE_FORMAL_COMMAND);
-            $buttons[] = new SimpleButton('Make text informal', self::MAKE_INFORMAL_COMMAND);
+                $this->cacheRepository->setState($user->userId, 'start');
+                $this->cacheRepository->removeOptions($user->userId);
 
-            $options->buttons = $buttons;
-            $message->options = $options;
-
-            return $message;
-        }
-
-        if($input === self::MENU_COMMAND){
-            $buttons = [];
-
-            $buttons[] = new SimpleButton('Check grammatical and lexical errors', self::CHECK_ERRORS_COMMAND);
-            $buttons[] = new SimpleButton('Improve text to advanced level', self::MAKE_ADVANCED_COMMAND);
-            $buttons[] = new SimpleButton('Make text formal', self::MAKE_FORMAL_COMMAND);
-            $buttons[] = new SimpleButton('Make text informal', self::MAKE_INFORMAL_COMMAND);
-
-            return new TextWithOptionsMessage([
-                'messageText' => 'Choose one of the next options',
-                'options'     => new Options(['buttons' => $buttons]),
-            ]);
-        }
-
-        // if it's not '/start' command and customer not added, send him a prompt
-        if (!Redis::exists("'user:' . $user->userId . '.state'")) {
-            Bugsnag::leaveBreadcrumb('State cache', null, ['state' => Redis::get("'user:' . $user->userId . '.state'")]);
-            Bugsnag::notifyError("State", "State wasn't set");
-
-            return new TextMessage("Please, enter '/start' command to start chatting");
-        }
-
-        // if option chosen ask user for putting text
-        if (Redis::get("'user:' . $user->userId . '.state'") === 'start' && in_array($input, array_keys(static::$options))) {
-            $message = new TextMessage("Please, put your text. Note: Your text should be not more than 500 words");
-
-            Redis::set("'user:' . $user->userId . '.state'", 'option_selected');
-            Redis::set("'user:' . $user->userId . '.option'", $input);
-
-            return $message;
-        }
-
-        // if customer chose option it can put its text
-        // TODO take options to another class in constants
-        if (
-            Redis::exists("'user:' . $user->userId . '.option'") && Redis::get("'user:' . $user->userId . '.state'"
-            ) === 'option_selected'
-        ) {
-            // provide answer form ChatGPT
-            $option = Redis::get("'user:' . $user->userId . '.option'");
-            $prompt = data_get(static::$prompts, $option, null);
-
-            if(!$prompt){
-                return new TextMessage("Some error occurs. Please, try again later");
+                return MessageFacade::createAIAnswer($answer);
             }
 
-            $prompt .= ": \"{$input}\"";
+            Bugsnag::leaveBreadcrumb("Option", null, ['option' => $this->cacheRepository->getCurrentOption($user->userId)]);
+            Bugsnag::notifyError("Incorrect input", "Incorrect input");
 
-            Bugsnag::leaveBreadcrumb('Prompt', null, ['prompt_text' => $prompt]);
+            return MessageFacade::createText('Incorrect input. Please, follow instructions');
+        } catch (\Throwable $e) {
+            Bugsnag::notifyException($e);
 
-            $result = OpenAI::completions()->create([
-                'model'       => 'text-davinci-003',
-                'prompt'      => $prompt,
-                'max_tokens'  => 950,
-                'temperature' => 0,
-            ]);
-
-            $text = $result['choices'][0]['text'];
-
-            Bugsnag::leaveBreadcrumb('Open AI response', null, $result->toArray());
-
-            Redis::set("'user:' . $user->userId . '.state'", 'start');
-            Redis::del("'user:' . $user->userId . '.option'");
-
-            $buttons   = [];
-            $buttons[] = new SimpleButton('Back to menu', self::MENU_COMMAND);
-            $buttons[] = new ShareButton('Share', $text);
-
-            return new TextWithOptionsMessage([
-                'messageText' => $text,
-                'options'     => new Options(['buttons' => $buttons]),
-            ]);
+            return MessageFacade::createText('Some error occurs. Please, try again later');
         }
-
-        Bugsnag::leaveBreadcrumb("Option", null, ['option' => Redis::get("'user:' . $user->userId . '.option'")]);
-        Bugsnag::notifyError("Incorrect input", "Incorrect input");
-
-        return new TextMessage("Incorrect input. Please, follow instructions");
     }
 
 }

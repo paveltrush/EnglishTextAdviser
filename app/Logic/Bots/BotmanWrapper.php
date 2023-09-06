@@ -26,7 +26,6 @@ class BotmanWrapper implements BotInterface
             $options = $message->options;
 
             foreach ($options->buttons as $button){
-
                 if($button instanceof SimpleButton){
                     $button = Button::create($button->text)->value($button->value);
                     $question->addButton($button);

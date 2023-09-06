@@ -5,20 +5,19 @@ namespace App\Http\Controllers;
 use App\Logic\Bots\BotmanWrapper;
 use App\Logic\Manager;
 use App\Logic\Values\UserDto;
+use BotMan\BotMan\BotMan;
 
-class BotmanController extends Controller
+class BotmanController extends Controller implements BotControllerInterface
 {
     /**
-     * Place your BotMan converison.
+     * Place your BotMan conversion.
      */
-    public function enterRequest()
+    public function handle(Manager $manager)
     {
         $botman = app('botman');
         $botmanWrapper = new BotmanWrapper($botman);
 
-        $manager = new Manager();
-
-        $botman->hears('{message}', function(\BotMan\BotMan\BotMan $botman, $input) use ($manager, $botmanWrapper){
+        $botman->hears('{message}', function(BotMan $botman, $input) use ($manager, $botmanWrapper){
             $botman->typesAndWaits(2);
 
             $userBotman = $botman->getUser();
