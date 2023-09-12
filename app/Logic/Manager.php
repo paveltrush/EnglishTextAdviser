@@ -2,13 +2,14 @@
 
 namespace App\Logic;
 
-use App\Logic\Exceptions\NotFoundOptionException;
+use App\Logic\Exceptions\WordsAmountExceededException;
 use App\Logic\Integrations\GeneretingModel;
 use App\Logic\Repositories\Cache\CacheRepository;
 use App\Logic\Repositories\DB\UserRepository;
 use App\Logic\Values\Message;
 use App\Logic\Values\UserDto;
 use Bugsnag\BugsnagLaravel\Facades\Bugsnag;
+use Illuminate\Support\Str;
 
 /**
  * Manager is responsible for resolving input request from users and returning messages
@@ -39,6 +40,11 @@ class Manager
         self::MAKE_FORMAL_COMMAND   => 'Make the next text formal',
         self::MAKE_INFORMAL_COMMAND => 'Make text informal',
     ];
+
+    public const START_STATE = 'start';
+    public const OPTION_SELECTED_STATE = 'option_selected';
+
+    public const MAX_WORDS = 500;
     protected GeneretingModel $model;
     protected UserRepository $userRepository;
     private CacheRepository $cacheRepository;
@@ -61,68 +67,73 @@ class Manager
             // check if command /start was typed by user and the user isn't added to the system
             if ($input === self::START_COMMAND) {
                 // if customer doesn't exist add it to the system
-                if (!$this->cacheRepository->checkUserExists($user->userId)) {
-                    if ($this->userRepository->exists($user->userId)) {
-                        $this->userRepository->create($user);
-                    }
+                if (!$this->userRepository->exists($user->userId)) {
+                    $this->userRepository->create($user);
+                }
 
+                if(!$this->cacheRepository->checkUserExists($user->userId)){
                     // Set primary state and clear options
-                    $this->cacheRepository->setState($user->userId, 'start');
+                    $this->cacheRepository->setState($user->userId, self::START_STATE);
                     $this->cacheRepository->removeOptions($user->userId);
                 }
-                // send options
-                return MessageFacade::createMenu('Hello! I\'m your text adviser. Choose one of the next options');
-            }
 
-            if ($input === self::MENU_COMMAND) {
-                return MessageFacade::createMenu('Choose one of the next options');
+                // send options
+                return MessageRepresentation::createMenu(MessageRepresentation::INTRODUCTION_MESSAGE);
             }
 
             // if it's not '/start' command and customer not added, send him a prompt
             if (!$this->cacheRepository->checkUserExists($user->userId)) {
-                Bugsnag::leaveBreadcrumb('State cache', null, ['state' => $this->cacheRepository->getCurrentState($user->userId)]);
                 Bugsnag::notifyError("State", "State wasn't set");
 
-                return MessageFacade::createText('Please, enter '.self::START_COMMAND.' command to start chatting');
+                return MessageRepresentation::createText(MessageRepresentation::ASK_FOR_START_COMMAND);
+            }
+
+            if ($input === self::MENU_COMMAND) {
+                return MessageRepresentation::createMenu(MessageRepresentation::MENU_TEXT);
             }
 
             // if option chosen ask user for putting text
-            if ($this->cacheRepository->getCurrentState($user->userId) === 'start' && in_array($input, array_keys(static::$options))) {
-                $this->cacheRepository->setState($user->userId, 'option_selected');
+            if (in_array($input, array_keys(static::$options))) {
+                $this->cacheRepository->setState($user->userId, self::OPTION_SELECTED_STATE);
                 $this->cacheRepository->setOption($user->userId, $input);
 
-                return MessageFacade::createText('Please, put your text. Note: Your text should be not more than 500 words');
+                return MessageRepresentation::createText(MessageRepresentation::ASK_FOR_TEXT);
             }
 
             // if customer chose option it can put its text
-            if ($this->cacheRepository->getCurrentOption($user->userId) &&
-                $this->cacheRepository->getCurrentState($user->userId) === 'option_selected') {
+            if (($option = $this->cacheRepository->getCurrentOption($user->userId)) &&
+                $this->cacheRepository->getCurrentState($user->userId) === self::OPTION_SELECTED_STATE) {
                 // getting answer from ChatGPT
-                $option = $this->cacheRepository->getCurrentOption($user->userId);
                 $prompt = data_get(static::$prompts, $option);
 
-                if(!$prompt){
-                    throw new NotFoundOptionException();
+                if(Str::of($input)->wordCount() > self::MAX_WORDS){
+                    throw new WordsAmountExceededException();
                 }
 
                 $prompt .= ": \"{$input}\"";
 
                 $answer = $this->model->handlePrompt($prompt);
 
-                $this->cacheRepository->setState($user->userId, 'start');
+                $this->cacheRepository->setState($user->userId, self::START_STATE);
                 $this->cacheRepository->removeOptions($user->userId);
 
-                return MessageFacade::createAIAnswer($answer);
+                return MessageRepresentation::createAIAnswer($answer);
             }
 
-            Bugsnag::leaveBreadcrumb("Option", null, ['option' => $this->cacheRepository->getCurrentOption($user->userId)]);
             Bugsnag::notifyError("Incorrect input", "Incorrect input");
 
-            return MessageFacade::createText('Incorrect input. Please, follow instructions');
-        } catch (\Throwable $e) {
+            return MessageRepresentation::createText(MessageRepresentation::INCORRECT_INPUT);
+        }catch (WordsAmountExceededException $e){
             Bugsnag::notifyException($e);
 
-            return MessageFacade::createText('Some error occurs. Please, try again later');
+            return MessageRepresentation::createText(MessageRepresentation::WORDS_AMOUNT_EXCEEDED);
+        }catch (\Throwable $e) {
+            Bugsnag::notifyException($e);
+
+            return MessageRepresentation::createText(MessageRepresentation::ERROR_OCCURS);
+        } finally {
+            Bugsnag::leaveBreadcrumb("State", null, ['state' => $this->cacheRepository->getCurrentState($user->userId)]);
+            Bugsnag::leaveBreadcrumb("Option", null, ['option' => $this->cacheRepository->getCurrentOption($user->userId)]);
         }
     }
 

@@ -12,7 +12,7 @@ class ChatGPT3Client implements GeneretingModel
     public const MAX_TOKENS = 950;
     public const TEMPERATURE = 0;
 
-    public function handlePrompt(string $prompt)
+    public function handlePrompt(string $prompt): string
     {
         Bugsnag::leaveBreadcrumb('Prompt', null, ['prompt_text' => $prompt]);
 
