@@ -1,6 +1,6 @@
 ## Installation and configuration steps
 ### Git
-``git clone https://gitlab.com/trushPavel/englishtextadvicer.git``
+``git clone https://github.com/paveltrush/EnglishTextAdviser.git``
 ### Docker
 1. Create a docker/.env file, copy here content from docker/.env.example and put your data to variables.
 2. Launch docker/docker-build.sh (Linux, Mac OS)
