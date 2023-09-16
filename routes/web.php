@@ -19,7 +19,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::match(['get', 'post'], '/botman', [BotmanController::class,'enterRequest']);
+Route::match(['get', 'post'], '/botman', [BotmanController::class, 'handle']);
 
 Route::get('/set-telegram-webhook',[TelegramController::class, 'setWebhook']);
 Route::post('/'.config('telegram.bots.mybot.token').'/webhook', [TelegramController::class, 'handle']);

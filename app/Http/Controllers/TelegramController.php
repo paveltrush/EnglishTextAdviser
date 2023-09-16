@@ -12,10 +12,23 @@ use Telegram\Bot\Objects\Update as UpdateObject;
 
 class TelegramController extends Controller implements BotControllerInterface
 {
+    /**
+     * Set endpoint for telegram bot
+     *
+     * @return bool
+     * @throws \Telegram\Bot\Exceptions\TelegramSDKException
+     */
     public function setWebhook()
     {
-        return Telegram::setWebhook(['url' => config('telegram.bots.mybot.webhook_url')]);
+        return Telegram::setWebhook(['url' => config('telegram.bots.mybot.webhook_url').'/'.config('telegram.bots.mybot.token').'/webhook']);
     }
+
+    /**
+     * Endpoint for telegram implementation
+     *
+     * @param Manager $manager
+     * @return void
+     */
     public function handle(Manager $manager)
     {
         try {

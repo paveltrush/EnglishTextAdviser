@@ -10,7 +10,7 @@ use BotMan\BotMan\BotMan;
 class BotmanController extends Controller implements BotControllerInterface
 {
     /**
-     * Place your BotMan conversion.
+     * Endpoint for botman implementation
      */
     public function handle(Manager $manager)
     {
@@ -35,5 +35,7 @@ class BotmanController extends Controller implements BotControllerInterface
         });
 
         $botman->listen();
+
+
     }
 }

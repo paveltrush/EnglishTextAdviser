@@ -10,9 +10,9 @@ interface CacheRepository
 
     public function setOption(string $id, string $option);
 
-    public function getCurrentState(string $id): string;
+    public function getCurrentState(string $id): ?string;
 
-    public function getCurrentOption(string $id): string;
+    public function getCurrentOption(string $id): ?string;
 
     public function removeState(string $id);
 

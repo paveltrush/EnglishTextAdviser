@@ -21,12 +21,12 @@ class RedisCache implements CacheRepository
         Redis::set("'user:' . $id . '.option'", $option);
     }
 
-    public function getCurrentState(string $id): string
+    public function getCurrentState(string $id): ?string
     {
         return Redis::get("'user:' . $id . '.state'");
     }
 
-    public function getCurrentOption(string $id): string
+    public function getCurrentOption(string $id): ?string
     {
         return Redis::get("'user:' . $id . '.option'");
     }

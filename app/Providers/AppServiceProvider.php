@@ -19,11 +19,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->when([BotmanController::class, TelegramController::class])
-            ->needs(Manager::class)
-            ->give(function (){
-                return new Manager(new ChatGPT3Client(), new UserRepositoryEloquent(), new RedisCache());
-            });
+        $this->app->bind(Manager::class, function (){
+            return new Manager(new ChatGPT3Client(), new UserRepositoryEloquent(), new RedisCache());
+        });
     }
 
     /**
